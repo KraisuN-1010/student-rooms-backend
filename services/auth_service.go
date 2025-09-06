@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/KraisuN-1010/student-rooms-backend/db"
@@ -114,6 +115,10 @@ func (s *AuthService) generateToken(userID string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte("your-secret-key")) // TODO: Use environment variable
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "fallback-secret-key" // Fallback for development
+	}
+	return token.SignedString([]byte(jwtSecret))
 }
 

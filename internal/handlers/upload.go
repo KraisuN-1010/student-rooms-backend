@@ -14,6 +14,12 @@ type FileUploadHandler struct {
 }
 
 func NewFileUploadHandler(uploadPath string) *FileUploadHandler {
+	// Create upload directory if it doesn't exist
+	if err := os.MkdirAll(uploadPath, 0755); err != nil {
+		// Log error but don't fail - this is for development
+		fmt.Printf("Warning: Could not create upload directory: %v\n", err)
+	}
+	
 	return &FileUploadHandler{
 		uploadPath: uploadPath,
 	}

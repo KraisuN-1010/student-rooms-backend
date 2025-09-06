@@ -35,7 +35,7 @@ func main() {
     noteHandler := handlers.NewNoteHandler(noteService)
     commentHandler := handlers.NewCommentHandler(commentService)
     doubtHandler := handlers.NewDoubtHandler(doubtService)
-    uploadHandler := handlers.NewFileUploadHandler("./uploads")
+    uploadHandler := handlers.NewFileUploadHandler("/tmp/uploads")
 
     // Health check
     app.GET("/", func(c *gofr.Context) (interface{}, error) {
@@ -73,10 +73,16 @@ func main() {
 
     // WebSocket integration endpoint
     app.GET("/ws-info", func(c *gofr.Context) (interface{}, error) {
+        // For production, use environment variables or configuration
+        websocketURL := os.Getenv("WEBSOCKET_URL")
+        if websocketURL == "" {
+            websocketURL = "ws://localhost:8001/ws"
+        }
+        
         return map[string]string{
-            "websocket_url": "ws://localhost:8001/ws",
-            "status": "WebSocket server running on port 8001",
-            "test_client": "http://localhost:8000/static/websocket_client.html",
+            "websocket_url": websocketURL,
+            "status": "WebSocket server running",
+            "test_client": "/static/websocket_client.html",
         }, nil
     })
 
