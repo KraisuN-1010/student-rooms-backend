@@ -1,0 +1,15 @@
+# Go
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# VSCode
+.vscode/
+
+# Environment files
+.env
+
+# Node modules (if any)
+node_modules/
