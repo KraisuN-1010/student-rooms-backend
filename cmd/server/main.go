@@ -1,27 +1,91 @@
 package main
 
 import (
-	"log"
+    "log"
+    "os"
 
-	"gofr.dev/pkg/gofr"
-	"github.com/KraisuN-1010/student-rooms-backend/internal/handlers"
+    "gofr.dev/pkg/gofr"
+    "github.com/KraisuN-1010/student-rooms-backend/db"
+    "github.com/KraisuN-1010/student-rooms-backend/internal/handlers"
+    "github.com/KraisuN-1010/student-rooms-backend/services"
 )
 
 func main() {
-	// Create new GoFr app
-	app := gofr.New()
+    // Connect to database
+    if err := db.Connect(); err != nil {
+        log.Fatalf("Database connection failed: %v", err)
+    }
 
-	// Health check route
-	app.GET("/", func(c *gofr.Context) (interface{}, error) {
-		return "Student Rooms Backend is running!", nil
-	})
+    // Create GoFr app
+    app := gofr.New()
 
-	// Sample rooms route
-	app.GET("/rooms", handlers.GetRooms)
+    // Initialize services
+    roomService := services.NewRoomService()
+    authService := services.NewAuthService()
+    noteService := services.NewNoteService()
+    commentService := services.NewCommentService()
+    doubtService := services.NewDoubtService()
 
-	// Set server port explicitly to 8000
-	const port = "8000"
+    // Initialize WebSocket service (for future integration)
+    _ = services.NewWebSocketService()
 
-	log.Println("Starting server on http://localhost:" + port)
-	app.Run() // GoFr uses its internal default port (8000 in your case)
+    // Initialize handlers
+    roomHandler := handlers.NewRoomHandler(roomService)
+    authHandler := handlers.NewAuthHandler(authService)
+    noteHandler := handlers.NewNoteHandler(noteService)
+    commentHandler := handlers.NewCommentHandler(commentService)
+    doubtHandler := handlers.NewDoubtHandler(doubtService)
+    uploadHandler := handlers.NewFileUploadHandler("./uploads")
+
+    // Health check
+    app.GET("/", func(c *gofr.Context) (interface{}, error) {
+        return "Student Rooms Backend is running!", nil
+    })
+
+    // Auth routes
+    app.POST("/auth/signup", authHandler.SignUp)
+    app.POST("/auth/login", authHandler.Login)
+
+    // Rooms routes
+    app.GET("/rooms", roomHandler.GetRooms)
+    app.POST("/rooms", roomHandler.CreateRoom)
+
+    // Posts routes (using posts table)
+    app.GET("/rooms/:roomId/posts", noteHandler.GetNotesByRoom)
+    app.POST("/rooms/:roomId/posts", noteHandler.CreateNote)
+    
+    // Notes routes (alias for backward compatibility)
+    app.GET("/rooms/:roomId/notes", noteHandler.GetNotesByRoom)
+    app.POST("/rooms/:roomId/notes", noteHandler.CreateNote)
+
+    // Comments routes
+    app.GET("/comments/:parentId", commentHandler.GetCommentsByParent)
+    app.POST("/comments", commentHandler.CreateComment)
+
+    // Doubts routes
+    app.GET("/rooms/:roomId/doubts", doubtHandler.GetDoubtsByRoom)
+    app.POST("/rooms/:roomId/doubts", doubtHandler.CreateDoubt)
+
+    // File upload routes
+    app.POST("/upload", uploadHandler.UploadFile)
+    app.POST("/upload/multiple", uploadHandler.UploadMultipleFiles)
+    app.GET("/files/:fileId", uploadHandler.GetFileInfo)
+
+    // WebSocket integration endpoint
+    app.GET("/ws-info", func(c *gofr.Context) (interface{}, error) {
+        return map[string]string{
+            "websocket_url": "ws://localhost:8001/ws",
+            "status": "WebSocket server running on port 8001",
+            "test_client": "http://localhost:8000/static/websocket_client.html",
+        }, nil
+    })
+
+    // Port
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8000"
+    }
+
+    log.Println("Starting server on port", port)
+    app.Run()
 }

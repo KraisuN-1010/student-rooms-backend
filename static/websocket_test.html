@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test - Student Rooms</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: white;
+            border-radius: 3px;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Student Rooms - WebSocket Test</h1>
+    
+    <div class="container">
+        <h3>Connection</h3>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <input type="text" id="userId" placeholder="User ID" value="test-user-123">
+        <input type="text" id="roomId" placeholder="Room ID" value="test-room-456">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+
+    <div class="container">
+        <h3>Send Message</h3>
+        <input type="text" id="messageType" placeholder="Message Type" value="chat">
+        <input type="text" id="messageContent" placeholder="Message Content">
+        <button onclick="sendMessage()">Send Message</button>
+    </div>
+
+    <div class="container">
+        <h3>Messages</h3>
+        <div id="messages" class="messages"></div>
+        <button onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            const roomId = document.getElementById('roomId').value;
+            
+            if (!userId || !roomId) {
+                alert('Please enter both User ID and Room ID');
+                return;
+            }
+
+            const wsUrl = `ws://localhost:8000/ws?user_id=${userId}&room_id=${roomId}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function(event) {
+                isConnected = true;
+                updateStatus('Connected', true);
+                addMessage('System', 'Connected to WebSocket');
+            };
+
+            ws.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                addMessage('Received', JSON.stringify(message, null, 2));
+            };
+
+            ws.onclose = function(event) {
+                isConnected = false;
+                updateStatus('Disconnected', false);
+                addMessage('System', 'Disconnected from WebSocket');
+            };
+
+            ws.onerror = function(error) {
+                addMessage('Error', 'WebSocket error: ' + error);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            if (!isConnected) {
+                alert('Not connected to WebSocket');
+                return;
+            }
+
+            const type = document.getElementById('messageType').value;
+            const content = document.getElementById('messageContent').value;
+            
+            if (!type || !content) {
+                alert('Please enter both message type and content');
+                return;
+            }
+
+            const message = {
+                type: type,
+                content: content
+            };
+
+            ws.send(JSON.stringify(message));
+            addMessage('Sent', JSON.stringify(message, null, 2));
+            document.getElementById('messageContent').value = '';
+        }
+
+        function addMessage(sender, content) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.innerHTML = `<strong>${sender}:</strong> ${content}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(text, connected) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = connected ? 'status connected' : 'status disconnected';
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            addMessage('System', 'WebSocket Test Client Ready');
+        };
+    </script>
+</body>
+</html>

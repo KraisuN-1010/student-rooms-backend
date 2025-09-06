@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Rooms - WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .message {
+            margin: 8px 0;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .message.system { border-left-color: #28a745; }
+        .message.sent { border-left-color: #ffc107; }
+        .message.received { border-left-color: #17a2b8; }
+        input, button, select {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .room-stats {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎓 Student Rooms - Real-time Features</h1>
+    
+    <div class="container">
+        <h3>🔌 WebSocket Connection</h3>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div class="input-group">
+            <input type="text" id="userId" placeholder="User ID" value="student-123">
+            <input type="text" id="roomId" placeholder="Room ID" value="room-456">
+            <button onclick="connect()" id="connectBtn">Connect</button>
+            <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+        <div class="room-stats" id="roomStats" style="display: none;">
+            <strong>Room Stats:</strong> <span id="activeUsers">0</span> active users
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>💬 Send Real-time Message</h3>
+        <div class="input-group">
+            <select id="messageType">
+                <option value="chat">Chat Message</option>
+                <option value="post_created">Post Created</option>
+                <option value="comment_created">Comment Created</option>
+                <option value="doubt_created">Doubt Created</option>
+                <option value="user_joined">User Joined</option>
+                <option value="typing">Typing Indicator</option>
+            </select>
+            <input type="text" id="messageContent" placeholder="Message content" style="flex: 1;">
+            <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📱 Live Messages</h3>
+        <div id="messages" class="messages"></div>
+        <button onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <div class="container">
+        <h3>🧪 Test Scenarios</h3>
+        <div class="input-group">
+            <button onclick="simulatePost()" id="simPostBtn" disabled>Simulate New Post</button>
+            <button onclick="simulateComment()" id="simCommentBtn" disabled>Simulate New Comment</button>
+            <button onclick="simulateDoubt()" id="simDoubtBtn" disabled>Simulate New Doubt</button>
+            <button onclick="simulateTyping()" id="simTypingBtn" disabled>Simulate Typing</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            const roomId = document.getElementById('roomId').value;
+            
+            if (!userId || !roomId) {
+                alert('Please enter both User ID and Room ID');
+                return;
+            }
+
+            const wsUrl = `ws://localhost:8001/ws?user_id=${userId}&room_id=${roomId}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function(event) {
+                isConnected = true;
+                reconnectAttempts = 0;
+                updateStatus('Connected to WebSocket', true);
+                updateButtons(true);
+                addMessage('system', 'Connected to WebSocket server');
+                getRoomStats();
+            };
+
+            ws.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                addMessage('received', `📨 ${message.type}: ${JSON.stringify(message, null, 2)}`);
+                
+                // Update room stats if it's a user count message
+                if (message.type === 'room_stats') {
+                    document.getElementById('activeUsers').textContent = message.data.active_users || 0;
+                }
+            };
+
+            ws.onclose = function(event) {
+                isConnected = false;
+                updateStatus('Disconnected from WebSocket', false);
+                updateButtons(false);
+                addMessage('system', 'Disconnected from WebSocket');
+                
+                // Auto-reconnect
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(() => {
+                        addMessage('system', `Attempting to reconnect... (${reconnectAttempts}/${maxReconnectAttempts})`);
+                        connect();
+                    }, 2000);
+                }
+            };
+
+            ws.onerror = function(error) {
+                addMessage('system', '❌ WebSocket error: ' + error);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            if (!isConnected) {
+                alert('Not connected to WebSocket');
+                return;
+            }
+
+            const type = document.getElementById('messageType').value;
+            const content = document.getElementById('messageContent').value;
+            
+            if (!type || !content) {
+                alert('Please enter both message type and content');
+                return;
+            }
+
+            const message = {
+                type: type,
+                content: content,
+                timestamp: new Date().toISOString()
+            };
+
+            ws.send(JSON.stringify(message));
+            addMessage('sent', `📤 ${type}: ${content}`);
+            document.getElementById('messageContent').value = '';
+        }
+
+        function simulatePost() {
+            const message = {
+                type: 'post_created',
+                content: 'New study notes posted: "Calculus Chapter 5"',
+                data: {
+                    post_id: 'post-' + Date.now(),
+                    title: 'Calculus Chapter 5',
+                    author: document.getElementById('userId').value
+                }
+            };
+            ws.send(JSON.stringify(message));
+            addMessage('sent', '📤 Simulated: New Post Created');
+        }
+
+        function simulateComment() {
+            const message = {
+                type: 'comment_created',
+                content: 'Great notes! Thanks for sharing.',
+                data: {
+                    comment_id: 'comment-' + Date.now(),
+                    post_id: 'post-123',
+                    author: document.getElementById('userId').value
+                }
+            };
+            ws.send(JSON.stringify(message));
+            addMessage('sent', '📤 Simulated: New Comment Created');
+        }
+
+        function simulateDoubt() {
+            const message = {
+                type: 'doubt_created',
+                content: 'Can someone explain integration by parts?',
+                data: {
+                    doubt_id: 'doubt-' + Date.now(),
+                    question: 'Integration by parts explanation needed',
+                    author: document.getElementById('userId').value
+                }
+            };
+            ws.send(JSON.stringify(message));
+            addMessage('sent', '📤 Simulated: New Doubt Created');
+        }
+
+        function simulateTyping() {
+            const message = {
+                type: 'typing',
+                content: 'is typing...',
+                data: {
+                    user: document.getElementById('userId').value,
+                    room: document.getElementById('roomId').value
+                }
+            };
+            ws.send(JSON.stringify(message));
+            addMessage('sent', '📤 Simulated: Typing Indicator');
+        }
+
+        function getRoomStats() {
+            fetch('http://localhost:8001/health')
+                .then(response => response.text())
+                .then(data => {
+                    addMessage('system', 'WebSocket server health: ' + data);
+                })
+                .catch(err => {
+                    addMessage('system', 'Could not get server stats: ' + err);
+                });
+        }
+
+        function addMessage(type, content) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <strong>[${timestamp}]</strong> ${content}
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(text, connected) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = text;
+            statusDiv.className = connected ? 'status connected' : 'status disconnected';
+        }
+
+        function updateButtons(connected) {
+            document.getElementById('connectBtn').disabled = connected;
+            document.getElementById('disconnectBtn').disabled = !connected;
+            document.getElementById('sendBtn').disabled = !connected;
+            document.getElementById('simPostBtn').disabled = !connected;
+            document.getElementById('simCommentBtn').disabled = !connected;
+            document.getElementById('simDoubtBtn').disabled = !connected;
+            document.getElementById('simTypingBtn').disabled = !connected;
+            
+            if (connected) {
+                document.getElementById('roomStats').style.display = 'block';
+            }
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            addMessage('system', '🚀 Student Rooms WebSocket Client Ready');
+            addMessage('system', '💡 Enter User ID and Room ID, then click Connect');
+        };
+    </script>
+</body>
+</html>
